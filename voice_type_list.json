@@ -1,0 +1,22 @@
+{
+    "S_r5Xp9i6s1": {
+        "cluster": "volcano_icl",
+        "emotions": [
+            ""
+        ]
+    },
+
+    "zh_male_beijingxiaoye_emo_v2_mars_bigtts": {
+        "cluster": "volcano_tts",
+        "emotions": [
+            "angry", "surprised", "fear", "excited", "coldness", "neutral"
+        ]
+    },
+
+    "zh_female_roumeinvyou_emo_v2_mars_bigtts": {
+        "cluster": "volcano_tts",
+        "emotions": [
+            "happy", "sad", "angry", "surprised", "fear", "hate", "excited", "coldness", "neutral"
+        ]
+    }
+}

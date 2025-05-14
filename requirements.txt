@@ -1,0 +1,11 @@
+asyncio
+websockets==10.1
+requests
+python-dotenv
+sounddevice
+scipy
+numpy
+pydantic
+fastapi[standard]
+ngrok
+pydub
