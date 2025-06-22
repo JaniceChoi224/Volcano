@@ -1,30 +1,53 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>DeepSeek Voice Chat</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #f0f2f5;
+    *, *::before, *::after {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      height: 100%;
       margin: 0;
       padding: 0;
+      font-family: Arial, sans-serif;
+      font-size: clamp(1rem, 2.8vw, 1.2rem);
+      background: #f0f2f5;
       display: flex;
       flex-direction: column;
-      height: 100vh;
     }
+
+    h1 {
+      font-size: clamp(1.8rem, 5vw, 2.5rem);
+      margin: 0.5em 0;
+    }
+
+    p {
+      margin: 0.5em 0;
+    }
+
     .welcome {
       text-align: center;
+      padding: 20px;
+      max-height: 100%;
+      overflow-y: auto;
     }
-    #record-btn, #proceed-btn, #upload-btn {
+
+    #record-btn, #proceed-btn, #upload-btn, #send-btn, #start-btn {
       margin-top: 10px;
-      padding: 10px 20px;
+      padding: 12px 20px;
       border: none;
       border-radius: 20px;
       background: #4caf50;
       color: white;
       cursor: pointer;
+      font-size: clamp(1rem, 2.8vw, 1.2rem);
+      width: auto;
     }
+
     #chat-box {
       flex: 1;
       overflow-y: auto;
@@ -32,6 +55,7 @@
       display: flex;
       flex-direction: column;
     }
+
     .message {
       display: inline-block;
       max-width: 70%;
@@ -40,54 +64,78 @@
       border-radius: 15px;
       word-wrap: break-word;
       display: flex;
-      flex-direction: column; /* Align text and audio vertically */
+      flex-direction: column;
       align-items: flex-start;
       margin: 5px 0;
     }
+
     .message audio {
-      margin-top: 5px; /* Space between text and audio */
-      width: 100%; /* Make audio bar full width */
+      margin-top: 5px;
+      width: 100%;
     }
+
     .user {
       background: #4caf50;
       align-self: flex-end;
       text-align: right;
-      margin-left: auto; /* Ensure it starts from the right edge */
+      margin-left: auto;
       border-radius: 15px 15px 0 15px;
-      max-width: fit-content;
     }
+
     .bot {
       background: #9fe0f7;
       align-self: flex-start;
       text-align: left;
-      margin-right: auto; /* Ensure it starts from the left edge */
+      margin-right: auto;
       border-radius: 15px 15px 15px 0;
-      max-width: fit-content;
     }
+
     #input-area {
-      display: flex;
-      padding: 10px;
+      position: sticky;
+      bottom: 0;
       background: #fff;
+      padding: 10px;
+      gap: 10px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      z-index: 1000;
     }
+
     #input {
       flex: 1;
       padding: 10px;
       border-radius: 20px;
       border: 1px solid #ccc;
       outline: none;
+      min-width: 0;
+      width: 100%;
+      max-width: 600px;
+      font-size: clamp(1rem, 2.8vw, 1.2rem);
     }
-    #send-btn, #start-btn {
-      margin-left: 10px;
-      padding: 10px 20px;
-      border: none;
-      border-radius: 20px;
-      background: #4caf50;
-      color: white;
-      cursor: pointer;
-    }
+
     .recording {
       background: red !important;
       color: white !important;
+    }
+
+    @media (max-width: 768px) {
+      #chat-box {
+        font-size: 18px;
+      }
+
+      #input-area {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      #input, #send-btn, #start-btn {
+        width: 100%;
+      }
+
+      .message {
+        max-width: 70%;
+      }
     }
   </style>
 </head>
@@ -112,7 +160,7 @@
 
   <script>
     // const backendUrl = "http://127.0.0.1:8000";
-    const backendUrl = "http://logically-sunny-boxer.ngrok-free.app";
+    const backendUrl = "https://logically-sunny-boxer.ngrok-free.app";
 
     document.getElementById('upload-btn').addEventListener('click', () => {
       document.getElementById('upload-input').click();
@@ -185,18 +233,15 @@
     // Proceed button - Check if voice file exists via API
     document.getElementById('proceed-btn').addEventListener('click', async () => {
       try {
-        console.log("Checking audio path...");
-        const response = await fetch(`${backendUrl}/check-audio-path/`, {
-          method: "GET",
-          headers: { "Accept": "application/json" },
-        });
+        // console.log("Checking audio path...");
+        const response = await fetch(`${backendUrl}/check-audio-path/`);
+        // console.log("API Response:", response);
         const contentType = response.headers.get("content-type");
         // if (!contentType.includes("application/json")) {
         //   throw new Error("Expected JSON, got something else");
         // }
-        console.log("API Response:", response);
         const data = await response.json();
-        console.log("API Response:", data);
+        // console.log("API Response:", data);
         
         if (data.status === "success" && data.exists) {
           // File exists, proceed to chat

@@ -1,7 +1,6 @@
 import sounddevice as sd
 import scipy.io.wavfile as wav
 import os
-import asyncio
 import requests
 import json
 import base64
@@ -9,6 +8,7 @@ import websockets
 import uuid
 import gzip
 import copy
+import tos
 from pydub import AudioSegment
 from io import BytesIO
 from pydantic import BaseModel
@@ -62,6 +62,7 @@ def record_audio(filename: str, duration: int = 10, samplerate: int = 24000):
     recording = sd.rec(int(duration * samplerate), samplerate=samplerate, channels=1, dtype='int16')
     sd.wait()  # Wait until finished
     wav.write(dirpath + filepath, samplerate, recording)
+    upload_audio(filename, dirpath + filepath)
     return filepath
 
 
@@ -105,7 +106,14 @@ def convert_audio_to_wav(file_content: bytes, input_format: str) -> str:
     wav_file_path = os.path.join(AUDIO_SAVE_PATH, wav_filename)
 
     # Export to .wav format
-    audio.export(dirpath + wav_file_path, format="wav")
+    audio.export(dirpath + wav_file_path, format="wav", parameters=[
+        "-ar", "24000",  # sample rate: 24000 Hz
+        "-ac", "1",      # channels: 1 (mono)
+        "-sample_fmt", "s16"  # sample format: 16-bit PCM
+    ])
+
+    upload_audio(wav_filename, dirpath + wav_file_path)
+    print('Uploaded the .wav file to TOS')
 
     return wav_file_path
 
@@ -423,3 +431,138 @@ def parse_response(res, file):
     else:
         print("undefined message type!")
         return True
+
+
+# 从环境变量获取 AK 和 SK 信息。
+TOS_ACCESS_KEY = os.getenv('TOS_ACCESS_KEY')
+TOS_SECRET_KEY = os.getenv('TOS_SECRET_KEY')
+# your endpoint 和 your region 填写Bucket 所在区域对应的Endpoint。# 以华北2(北京)为例，your endpoint 填写 tos-cn-beijing.volces.com，your region 填写 cn-beijing。
+endpoint = "tos-cn-beijing.volces.com"
+region = "cn-beijing"
+bucket_name = "voicecompanion2"
+
+
+def upload_audio(object_key, file_name):
+    try:
+        # 创建 TosClientV2 对象，对桶和对象的操作都通过 TosClientV2 实现
+        client = tos.TosClientV2(TOS_ACCESS_KEY, TOS_SECRET_KEY, endpoint, region)
+        # 将本地文件上传到目标桶中
+        # file_name为本地文件的完整路径。
+        client.put_object_from_file(bucket_name, object_key, file_name)
+    except tos.exceptions.TosClientError as e:
+        # 操作失败，捕获客户端异常，一般情况为非法请求参数或网络异常
+        print('fail with client error, message:{}, cause: {}'.format(e.message, e.cause))
+    except tos.exceptions.TosServerError as e:
+        # 操作失败，捕获服务端异常，可从返回信息中获取详细错误信息
+        print('fail with server error, code: {}'.format(e.code))
+        # request id 可定位具体问题，强烈建议日志中保存
+        print('error with request id: {}'.format(e.request_id))
+        print('error with message: {}'.format(e.message))
+        print('error with http code: {}'.format(e.status_code))
+        print('error with ec: {}'.format(e.ec))
+        print('error with request url: {}'.format(e.request_url))
+    except Exception as e:
+        print('fail with unknown error: {}'.format(e))
+
+
+'''
+STT
+'''
+def stt_submit(file_url):
+
+    submit_url = f"https://{VOLCENGINE_HOST}/api/v3/auc/bigmodel/submit"
+
+    task_id = str(uuid.uuid4())
+
+    headers = {
+        "X-Api-App-Key": VOLCENGINE_APPID,
+        "X-Api-Access-Key": VOLCENGINE_TOKEN,
+        "X-Api-Resource-Id": "volc.bigasr.auc",
+        "X-Api-Request-Id": task_id,
+        "X-Api-Sequence": "-1"
+    }
+
+    request = {
+        "user": {
+            "uid": "fake_uid"
+        },
+        "audio": {
+            "url": file_url,
+            "format": "wav",
+            "codec": "raw",
+            "rate": 24000,
+            "bits": 16,
+            "channel": 1
+        },
+        "request": {
+            "model_name": "bigmodel",
+            # "enable_itn": True,
+            # "enable_punc": True,
+            # "enable_ddc": True,
+            "show_utterances": True,
+            # "enable_channel_split": True,
+            # "vad_segment": True,
+            # "enable_speaker_info": True,
+            "corpus": {
+                # "boosting_table_name": "test",
+                "correct_table_name": "",
+                "context": ""
+            }
+        }
+    }
+    print(f'Submit task id: {task_id}')
+    response = requests.post(submit_url, data=json.dumps(request), headers=headers)
+    if 'X-Api-Status-Code' in response.headers and response.headers["X-Api-Status-Code"] == "20000000":
+        print(f'Submit task response header X-Api-Status-Code: {response.headers["X-Api-Status-Code"]}')
+        print(f'Submit task response header X-Api-Message: {response.headers["X-Api-Message"]}')
+        x_tt_logid = response.headers.get("X-Tt-Logid", "")
+        print(f'Submit task response header X-Tt-Logid: {response.headers["X-Tt-Logid"]}\n')
+        return task_id, x_tt_logid
+    else:
+        print(f'Submit task failed and the response headers are: {response.headers}')
+        exit(1)
+    return task_id
+
+
+def stt_query(task_id, x_tt_logid):
+    query_url = f"https://{VOLCENGINE_HOST}/api/v3/auc/bigmodel/query"
+
+    headers = {
+        "X-Api-App-Key": VOLCENGINE_APPID,
+        "X-Api-Access-Key": VOLCENGINE_TOKEN,
+        "X-Api-Resource-Id": "volc.bigasr.auc",
+        "X-Api-Request-Id": task_id,
+        "X-Tt-Logid": x_tt_logid  # 固定传递 x-tt-logid
+    }
+
+    response = requests.post(query_url, json.dumps({}), headers=headers)
+
+    if 'X-Api-Status-Code' in response.headers:
+        print(f'Query task response header X-Api-Status-Code: {response.headers["X-Api-Status-Code"]}')
+        print(f'Query task response header X-Api-Message: {response.headers["X-Api-Message"]}')
+        print(f'Query task response header X-Tt-Logid: {response.headers["X-Tt-Logid"]}\n')
+    else:
+        print(f'Query task failed and the response headers are: {response.headers}')
+        exit(1)
+    return response
+
+
+def stt():
+    import time
+    from fastapi import HTTPException
+    file_url = "https://voicecompanion2.tos-cn-beijing.volces.com/voice_sample.wav"
+    task_id, x_tt_logid = stt_submit(file_url)
+    # while True:
+    for _ in range(30):  # max 30 retries
+        query_response = stt_query(task_id, x_tt_logid)
+        code = query_response.headers.get('X-Api-Status-Code', "")
+        if code == '20000000':  # task finished
+            print(query_response.json())
+            print("SUCCESS!")
+            return query_response.json()['result']['text']
+        elif code != '20000001' and code != '20000002':  # task failed
+            print("FAILED!")
+            # exit(1)
+            raise HTTPException(status_code=500, detail="STT task failed")
+    time.sleep(1)
+    raise HTTPException(status_code=504, detail="STT timed out")

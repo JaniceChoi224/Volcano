@@ -3,11 +3,11 @@ import os
 dirpath = os.path.dirname(__file__)
 sys.path.append(dirpath)  # adds current dir to path
 from typing import Annotated
-from fastapi import FastAPI, Request, UploadFile, HTTPException, Form, File
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, UploadFile, HTTPException, Form, File
+from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from backend import ChatRequest, CharacterInfo, record_audio, tts, query_deepseek, initiate_query_deepseek, convert_audio_to_wav, check_file_exists
+from backend import ChatRequest, CharacterInfo, record_audio, tts, query_deepseek, initiate_query_deepseek, convert_audio_to_wav, check_file_exists, stt
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 from dotenv import load_dotenv
@@ -40,10 +40,11 @@ class NoCacheStaticFiles(StaticFiles):
         return response
 
 app = FastAPI(lifespan=lifespan)
+# app = FastAPI()
 
 origins = [
     "http://localhost:3000",  # <-- must match exactly!
-    "http://logically-sunny-boxer.ngrok-free.app",
+    "https://logically-sunny-boxer.ngrok-free.app",
 ]
 
 app.add_middleware(
@@ -61,17 +62,20 @@ else:
     # Mount /static to serve files from ./static directory
     app.mount("/static", NoCacheStaticFiles(directory="static"), name="static")
 
+app.mount("/frontend", NoCacheStaticFiles(directory="frontend"), name="frontend")
 
 @app.post("/upload-voice/")
 async def upload_voice(file: UploadFile = File(...)):
     try:
+        print(f"Received upload: {file.filename}")
         # Check file extension
-        if file.content_type not in ["audio/wav", "audio/mpeg"]:
-            raise HTTPException(status_code=400, detail="Invalid file type. Only .wav and .mp3 are allowed.")
+        if file.content_type not in ["audio/wav", "audio/mpeg", "audio/webm"]:
+            raise HTTPException(status_code=400, detail="Invalid file type. Only .wav, .mp3, and .webm are allowed.")
 
         # Read the uploaded file content directly to memory
         file_content = await file.read()
         input_format = file.filename.split(".")[-1].lower()
+        print(f"Detected extension: {input_format}, size: {len(file_content)} bytes")
 
         # Convert the audio file to WAV and save it
         wav_file_path = convert_audio_to_wav(file_content, input_format)
@@ -87,6 +91,15 @@ async def upload_voice(file: UploadFile = File(...)):
 async def check_audio_path():
     file_exists = check_file_exists('audio', 'voice_sample.wav')
     content = {"status": "success", "exists": file_exists}
+    response = JSONResponse(content=content)
+    return response
+    # return JSONResponse(content={"status": "success", "exists": True})
+
+
+@app.get("/stt/")
+async def stt_endpoint():
+    text = stt()
+    content = {"status": "success", "text": text}
     response = JSONResponse(content=content)
     return response
 
@@ -150,9 +163,10 @@ async def initiate_chat(character_info: CharacterInfo):
 
 
 @app.get("/")
-async def root():
-    return {"message": "Welcome to the Voice Clone Preparation API (F5-TTS Ready)"}
+def serve_index():
+    return FileResponse(os.path.join("frontend", "index.html"))
 
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=False)
+    # uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=False)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)

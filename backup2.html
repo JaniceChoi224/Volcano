@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>DeepSeek Voice Chat</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      font-family: Arial, sans-serif;
+      font-size: clamp(14px, 2vw, 18px);
+      background: #f0f2f5;
+      display: flex;
+      flex-direction: column;
+    }
+    h1 { font-size: clamp(1.5rem, 4vw, 2.5rem); margin: 0.5em 0; }
+    .welcome {
+      text-align: center;
+      padding: 20px;
+      max-height: 100%;
+      overflow-y: auto;
+    }
+    button {
+      margin-top: 10px;
+      padding: 12px 20px;
+      border: none;
+      border-radius: 20px;
+      background: #4caf50;
+      color: white;
+      cursor: pointer;
+      font-size: clamp(0.9rem, 2.5vw, 1.1rem);
+      width: auto;
+    }
+    #chat-box {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+    }
+    .message {
+      display: inline-block;
+      max-width: 70%;
+      padding: 10px;
+      border-radius: 15px;
+      word-wrap: break-word;
+      display: flex;
+      flex-direction: column;
+      margin: 5px 0;
+    }
+    .message audio { margin-top: 5px; width: 100%; }
+    .user {
+      background: #4caf50;
+      align-self: flex-end;
+      border-radius: 15px 15px 0 15px;
+    }
+    .bot {
+      background: #9fe0f7;
+      align-self: flex-start;
+      border-radius: 15px 15px 15px 0;
+    }
+    #input-area {
+      position: sticky;
+      bottom: 0;
+      background: #fff;
+      padding: 10px;
+      gap: 10px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      z-index: 1000;
+    }
+    #input {
+      flex: 1;
+      padding: 10px;
+      border-radius: 20px;
+      border: 1px solid #ccc;
+      outline: none;
+      min-width: 0;
+      width: 100%;
+      max-width: 600px;
+      font-size: clamp(0.9rem, 2vw, 1.1rem);
+    }
+    @media (max-width: 768px) {
+      #input-area {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      #input, #send-btn, #start-btn {
+        width: 100%;
+      }
+      .message {
+        max-width: 90%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="welcome">
+    <h1>Welcome to DeepSeek Voice Chat</h1>
+    <p>Record your voice to start</p>
+    <button id="record-btn">Start Recording</button>
+    <audio id="recorded-audio" controls style="display:none;"></audio>
+  </div>
+
+  <div id="chat-box" style="display:none;"></div>
+
+  <div id="input-area" style="display: none;">
+    <input id="input" type="text" placeholder="Type your message..." />
+    <button id="send-btn">Send</button>
+    <button id="start-btn">Start New Chat</button>
+  </div>
+
+  <script>
+    const backendUrl = "https://logically-sunny-boxer.ngrok-free.app";
+    let historyPath = "", mediaRecorder, audioChunks = [], isRecording = false;
+    const recordBtn = document.getElementById('record-btn');
+
+    recordBtn.addEventListener('click', async () => {
+      if (!isRecording) {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+        audioChunks = [];
+
+        mediaRecorder.ondataavailable = event => audioChunks.push(event.data);
+
+        mediaRecorder.onstop = async () => {
+          const blob = new Blob(audioChunks, { type: 'audio/webm' });
+          const file = new File([blob], 'recorded_audio.webm', { type: 'audio/webm' });
+          const formData = new FormData();
+          formData.append('file', file);
+
+          try {
+            const res = await fetch(`${backendUrl}/upload-voice/`, {
+              method: 'POST',
+              body: formData
+            });
+            const data = await res.json();
+            if (data.status === "success") {
+              const audio = document.getElementById('recorded-audio');
+              audio.src = backendUrl + '/' + data.file;
+              audio.style.display = 'block';
+              document.querySelector('.welcome').style.display = 'none';
+              document.getElementById('chat-box').style.display = 'block';
+              document.getElementById('input-area').style.display = 'flex';
+            } else {
+              alert("Upload failed: " + data.message);
+            }
+          } catch (err) {
+            console.error("Upload error:", err);
+            alert("Failed to upload recording.");
+          }
+        };
+
+        mediaRecorder.start();
+        isRecording = true;
+        recordBtn.textContent = "Stop Recording";
+        recordBtn.style.background = "red";
+      } else {
+        mediaRecorder.stop();
+        isRecording = false;
+        recordBtn.textContent = "Start Recording";
+        recordBtn.style.background = "#4caf50";
+      }
+    });
+
+    const chatBox = document.getElementById('chat-box');
+    const input = document.getElementById('input');
+    const sendBtn = document.getElementById('send-btn');
+    const startBtn = document.getElementById('start-btn');
+
+    function appendMessage(sender, text, audioUrl = null) {
+      const message = document.createElement('div');
+      message.className = 'message ' + (sender === 'user' ? 'user' : 'bot');
+      message.innerHTML = `<div>${text}</div>`;
+      if (audioUrl) {
+        const audio = document.createElement('audio');
+        audio.src = `${backendUrl}/${audioUrl}?ts=${Date.now()}`;
+        audio.controls = true;
+        message.appendChild(audio);
+      }
+      chatBox.appendChild(message);
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    sendBtn.addEventListener('click', sendMessage);
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') sendMessage(); });
+
+    startBtn.addEventListener('click', async () => {
+      const name = prompt("Name?");
+      const gender = prompt("Gender?");
+      const age = prompt("Age?");
+      const job = prompt("Job?");
+      const relationship = prompt("Relationship?");
+      if (!name || !gender || !age || !job || !relationship) return alert("All fields required.");
+
+      const res = await fetch(`${backendUrl}/initiate/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, gender, age, job, relationship })
+      });
+      const data = await res.json();
+      historyPath = data.file;
+      appendMessage('bot', "Chat started: " + data.Reply);
+    });
+
+    async function sendMessage() {
+      const text = input.value.trim();
+      if (!text) return;
+      appendMessage('user', text);
+      input.value = '';
+
+      const res = await fetch(`${backendUrl}/chat/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text, path: historyPath })
+      });
+      const data = await res.json();
+      appendMessage('bot', data.reply);
+
+      const voiceRes = await fetch(`${backendUrl}/voice_clone/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: data.reply })
+      });
+
+      const voiceData = await voiceRes.json();
+      const audioFile = voiceData.file;
+      const lastBot = chatBox.querySelector('.bot:last-child');
+      if (lastBot && audioFile) {
+        const audio = document.createElement('audio');
+        audio.src = `${backendUrl}/${audioFile}?ts=${Date.now()}`;
+        audio.controls = true;
+        lastBot.appendChild(audio);
+      }
+    }
+  </script>
+</body>
+</html>
