@@ -9,3 +9,4 @@ pydantic
 fastapi[standard]
 ngrok
 pydub
+tos
