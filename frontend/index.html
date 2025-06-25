@@ -161,6 +161,8 @@
   <script>
     // const backendUrl = "http://127.0.0.1:8000";
     const backendUrl = "https://logically-sunny-boxer.ngrok-free.app";
+    let mediaRecorder;
+    let audioChunks = [];
 
     document.getElementById('upload-btn').addEventListener('click', () => {
       document.getElementById('upload-input').click();
@@ -201,32 +203,100 @@
       document.getElementById('input-area').style.display = 'none';
     });
 
+    // document.getElementById('record-btn').addEventListener('click', async () => {
+    //   const recordBtn = document.getElementById('record-btn');
+    //   recordBtn.textContent = "Recording...";
+    //   recordBtn.classList.add('recording');
+
+    //   try {
+    //     const response = await fetch(backendUrl + "/record-audio/", {
+    //       method: "POST",
+    //       headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    //       body: new URLSearchParams({ duration: 5, filename: "voice_sample.wav" })
+    //     });
+
+    //     const data = await response.json();
+    //     recordBtn.textContent = "Record Voice";
+    //     recordBtn.classList.remove('recording');
+
+    //     if (data.status === "success") {
+    //       document.getElementById('recorded-audio').src = backendUrl + "/" + data.file;
+    //       document.getElementById('recorded-audio').style.display = "block";
+    //       document.getElementById('proceed-btn').style.display = "block";
+    //     } else {
+    //       alert("Recording failed: " + data.message);
+    //     }
+    //   } catch (error) {
+    //     console.error(error);
+    //     alert("An error occurred while recording.");
+    //   }
+    // });
     document.getElementById('record-btn').addEventListener('click', async () => {
       const recordBtn = document.getElementById('record-btn');
-      recordBtn.textContent = "Recording...";
-      recordBtn.classList.add('recording');
+      if (mediaRecorder && mediaRecorder.state === 'recording') {
+        mediaRecorder.stop();
+        return;
+      }
 
       try {
-        const response = await fetch(backendUrl + "/record-audio/", {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: new URLSearchParams({ duration: 5, filename: "voice_sample.wav" })
-        });
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+        audioChunks = [];
 
-        const data = await response.json();
-        recordBtn.textContent = "Record Voice";
-        recordBtn.classList.remove('recording');
+        mediaRecorder.ondataavailable = event => {
+          if (event.data.size > 0) {
+            audioChunks.push(event.data);
+          }
+        };
 
-        if (data.status === "success") {
-          document.getElementById('recorded-audio').src = backendUrl + "/" + data.file;
-          document.getElementById('recorded-audio').style.display = "block";
-          document.getElementById('proceed-btn').style.display = "block";
-        } else {
-          alert("Recording failed: " + data.message);
-        }
-      } catch (error) {
-        console.error(error);
-        alert("An error occurred while recording.");
+        mediaRecorder.onstop = async () => {
+          const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+          const formData = new FormData();
+          formData.append('file', audioBlob, 'voice_sample.webm');
+
+          try {
+            const uploadRes = await fetch(backendUrl + "/upload-voice/", {
+              method: "POST",
+              body: formData,
+            });
+
+            if (!uploadRes.ok) {
+              const errorText = await uploadRes.text();
+              console.error("Upload failed response:", errorText);
+              throw new Error("Upload failed with status: " + uploadRes.status);
+            }
+
+            const result = await uploadRes.json();
+            if (result.status === 'success') {
+              alert("Voice uploaded successfully!");
+              const audioUrl = backendUrl + "/" + result.file;
+              document.getElementById('recorded-audio').src = audioUrl;
+              document.getElementById('recorded-audio').style.display = 'block';
+              document.getElementById('proceed-btn').style.display = 'block';
+            } else {
+              alert("Upload failed.");
+            }
+          } catch (err) {
+            console.error("Upload error:", err);
+            alert("Upload failed.");
+          }
+        };
+
+        mediaRecorder.start();
+        recordBtn.textContent = "Recording... (click to stop)";
+        recordBtn.classList.add('recording');
+
+        setTimeout(() => {
+          if (mediaRecorder.state === 'recording') {
+            mediaRecorder.stop();
+            recordBtn.textContent = "Record Voice";
+            recordBtn.classList.remove('recording');
+          }
+        }, 5000); // auto-stop after 5 seconds
+
+      } catch (err) {
+        console.error("MediaRecorder error:", err);
+        alert("Microphone access denied or unsupported.");
       }
     });
 
