@@ -173,6 +173,7 @@
       if (!file) return;
 
       const formData = new FormData();
+      formData.append("target", "voice_clone")
       formData.append("file", file);
 
       try {
@@ -233,6 +234,8 @@
     // });
     document.getElementById('record-btn').addEventListener('click', async () => {
       const recordBtn = document.getElementById('record-btn');
+
+      // Stop if already recording
       if (mediaRecorder && mediaRecorder.state === 'recording') {
         mediaRecorder.stop();
         return;
@@ -240,7 +243,13 @@
 
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        mediaRecorder = new MediaRecorder(stream);
+
+        let mimeType = 'audio/webm';
+        if (!MediaRecorder.isTypeSupported(mimeType)) {
+          mimeType = 'audio/webm;codecs=opus';
+        }
+
+        mediaRecorder = new MediaRecorder(stream, { mimeType });
         audioChunks = [];
 
         mediaRecorder.ondataavailable = event => {
@@ -250,8 +259,12 @@
         };
 
         mediaRecorder.onstop = async () => {
-          const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+          recordBtn.textContent = "Record Voice";
+          recordBtn.classList.remove('recording');
+
+          const audioBlob = new Blob(audioChunks, { type: mimeType });
           const formData = new FormData();
+          formData.append("target", "voice_clone")
           formData.append('file', audioBlob, 'voice_sample.webm');
 
           try {
@@ -285,14 +298,6 @@
         mediaRecorder.start();
         recordBtn.textContent = "Recording... (click to stop)";
         recordBtn.classList.add('recording');
-
-        setTimeout(() => {
-          if (mediaRecorder.state === 'recording') {
-            mediaRecorder.stop();
-            recordBtn.textContent = "Record Voice";
-            recordBtn.classList.remove('recording');
-          }
-        }, 5000); // auto-stop after 5 seconds
 
       } catch (err) {
         console.error("MediaRecorder error:", err);

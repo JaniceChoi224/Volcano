@@ -65,7 +65,7 @@ else:
 app.mount("/frontend", NoCacheStaticFiles(directory="frontend"), name="frontend")
 
 @app.post("/upload-voice/")
-async def upload_voice(file: UploadFile = File(...)):
+async def upload_voice(target: str = Form(...), file: UploadFile = File(...)):
     try:
         print(f"Received upload: {file.filename}")
         # Check file extension
@@ -77,8 +77,13 @@ async def upload_voice(file: UploadFile = File(...)):
         input_format = file.filename.split(".")[-1].lower()
         print(f"Detected extension: {input_format}, size: {len(file_content)} bytes")
 
+        if target == 'voice_clone':
+            filename = 'voice_sample.wav'
+        else:
+            filename = 'voice_chat.wav'
+        print(f'filename: {filename}')
         # Convert the audio file to WAV and save it
-        wav_file_path = convert_audio_to_wav(file_content, input_format)
+        wav_file_path = convert_audio_to_wav(file_content, input_format, filename)
         content = {"status": "success", "file": wav_file_path}
         response = JSONResponse(content=content)
         return response

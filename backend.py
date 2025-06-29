@@ -86,13 +86,14 @@ def check_file_exists(category: str, filename: str) -> bool:
     return os.path.exists(dirpath + file_path)
 
 
-def convert_audio_to_wav(file_content: bytes, input_format: str) -> str:
+def convert_audio_to_wav(file_content: bytes, input_format: str, filename: str) -> str:
     """
     Converts an in-memory audio file (bytes) to WAV format and saves it to a directory.
 
     Args:
         file_content (bytes): The input audio file content in bytes.
         input_format (str): The format of the input file (e.g., "mp3", "wav").
+        filename (str):  The name of the output file.
 
     Returns:
         str: The path to the saved WAV file.
@@ -100,10 +101,7 @@ def convert_audio_to_wav(file_content: bytes, input_format: str) -> str:
     # Convert the file content to an audio segment
     audio = AudioSegment.from_file(BytesIO(file_content), format=input_format)
 
-    # Define output filename
-    wav_filename = "voice_sample.wav"
-
-    wav_file_path = os.path.join(AUDIO_SAVE_PATH, wav_filename)
+    wav_file_path = os.path.join(AUDIO_SAVE_PATH, filename)
 
     # Export to .wav format
     audio.export(dirpath + wav_file_path, format="wav", parameters=[
@@ -112,7 +110,7 @@ def convert_audio_to_wav(file_content: bytes, input_format: str) -> str:
         "-sample_fmt", "s16"  # sample format: 16-bit PCM
     ])
 
-    upload_audio(wav_filename, dirpath + wav_file_path)
+    upload_audio(filename, dirpath + wav_file_path)
     print('Uploaded the .wav file to TOS')
 
     return wav_file_path
@@ -550,7 +548,7 @@ def stt_query(task_id, x_tt_logid):
 def stt():
     import time
     from fastapi import HTTPException
-    file_url = "https://voicecompanion2.tos-cn-beijing.volces.com/voice_sample.wav"
+    file_url = "https://voicecompanion2.tos-cn-beijing.volces.com/voice_chat.wav"
     task_id, x_tt_logid = stt_submit(file_url)
     # while True:
     for _ in range(30):  # max 30 retries
