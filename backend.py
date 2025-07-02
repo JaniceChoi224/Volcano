@@ -38,8 +38,9 @@ os.makedirs(dirpath + TEMPLATE_PATH, exist_ok=True)
 DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 
-spk_id = "S_r5Xp9i6s1"
-emotion = "angry"
+# spk_id = "S_r5Xp9i6s1"
+spk_id = "zh_female_roumeinvyou_emo_v2_mars_bigtts"
+emotion = "neutral"
 emotion_scale = 3
 
 

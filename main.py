@@ -7,7 +7,7 @@ from fastapi import FastAPI, UploadFile, HTTPException, Form, File
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from backend import ChatRequest, CharacterInfo, record_audio, tts, query_deepseek, initiate_query_deepseek, convert_audio_to_wav, check_file_exists, stt
+from backend import ChatRequest, CharacterInfo, record_audio, tts, query_deepseek, initiate_query_deepseek, convert_audio_to_wav, check_file_exists, stt, voice_clone
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 from dotenv import load_dotenv
@@ -109,6 +109,14 @@ async def stt_endpoint():
     return response
 
 
+@app.get("/voice_clone/")
+async def voice_clone_endpoint():
+    spk_id = voice_clone()
+    content = {"status": "success", "spk_id": spk_id}
+    response = JSONResponse(content=content)
+    return response
+
+
 @app.post("/record-audio/")
 async def record_audio_endpoint(duration: int = Form(10), filename: str = Form("voice_sample.wav")):
     """
@@ -128,8 +136,8 @@ class TextData(BaseModel):
     text: str
 
 
-@app.post("/voice_clone/")
-async def voice_clone_endpoint(data: TextData):
+@app.post("/tts/")
+async def tts_endpoint(data: TextData):
     # try:
         # saved_path = tts(data.text)
         # # saved_path = generate_combined_voice(data.text)
