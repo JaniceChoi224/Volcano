@@ -1,5 +1,5 @@
-import sounddevice as sd
-import scipy.io.wavfile as wav
+# import sounddevice as sd
+# import scipy.io.wavfile as wav
 import os
 import requests
 import json
@@ -57,14 +57,14 @@ class CharacterInfo(BaseModel):
     relationship: str
 
 
-def record_audio(filename: str, duration: int = 10, samplerate: int = 24000):
-    """Record audio from the microphone."""
-    filepath = os.path.join(AUDIO_SAVE_PATH, filename)
-    recording = sd.rec(int(duration * samplerate), samplerate=samplerate, channels=1, dtype='int16')
-    sd.wait()  # Wait until finished
-    wav.write(dirpath + filepath, samplerate, recording)
-    upload_audio(filename, dirpath + filepath)
-    return filepath
+# def record_audio(filename: str, duration: int = 10, samplerate: int = 24000):
+#     """Record audio from the microphone."""
+#     filepath = os.path.join(AUDIO_SAVE_PATH, filename)
+#     recording = sd.rec(int(duration * samplerate), samplerate=samplerate, channels=1, dtype='int16')
+#     sd.wait()  # Wait until finished
+#     wav.write(dirpath + filepath, samplerate, recording)
+#     upload_audio(filename, dirpath + filepath)
+#     return filepath
 
 
 def check_file_exists(category: str, filename: str) -> bool:

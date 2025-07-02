@@ -7,7 +7,7 @@ from fastapi import FastAPI, UploadFile, HTTPException, Form, File
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from backend import ChatRequest, CharacterInfo, record_audio, tts, query_deepseek, initiate_query_deepseek, convert_audio_to_wav, check_file_exists, stt, voice_clone
+from backend import ChatRequest, CharacterInfo, tts, query_deepseek, initiate_query_deepseek, convert_audio_to_wav, check_file_exists, stt, voice_clone  #, record_audio
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 from dotenv import load_dotenv
@@ -117,19 +117,19 @@ async def voice_clone_endpoint():
     return response
 
 
-@app.post("/record-audio/")
-async def record_audio_endpoint(duration: int = Form(10), filename: str = Form("voice_sample.wav")):
-    """
-    Records audio from the microphone.
-    """
-    try:
-        saved_path = record_audio(filename=filename, duration=duration)
+# @app.post("/record-audio/")
+# async def record_audio_endpoint(duration: int = Form(10), filename: str = Form("voice_sample.wav")):
+#     """
+#     Records audio from the microphone.
+#     """
+#     try:
+#         saved_path = record_audio(filename=filename, duration=duration)
 
-        content = {"status": "success", "file": saved_path}
-        response = JSONResponse(content=content)
-        return response
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+#         content = {"status": "success", "file": saved_path}
+#         response = JSONResponse(content=content)
+#         return response
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=str(e))
 
 
 class TextData(BaseModel):
