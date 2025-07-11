@@ -7,12 +7,13 @@ from fastapi import FastAPI, UploadFile, HTTPException, Form, File
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from backend import ChatRequest, CharacterInfo, tts, query_deepseek, initiate_query_deepseek, convert_audio_to_wav, check_file_exists, stt, voice_clone  #, record_audio
+from backend import ChatRequest, CharacterInfo, tts, query_deepseek, initiate_query_deepseek, convert_audio_to_wav, check_file_exists, stt, voice_clone, save_chat_txt, get_daily_report_deepseek  #, record_audio
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
 import ngrok
+from models import *
 
 
 load_dotenv()  # defaults to .env in current dir
@@ -175,11 +176,24 @@ async def initiate_chat(character_info: CharacterInfo):
     return response
 
 
+@app.post("/get-daily-report/")
+async def get_daily_report(userfnames: UserFNames):
+    try:
+        report = get_daily_report_deepseek(userfnames)
+        report_json = report.model_dump_json()
+    
+        content = {"message": "Daily report generated successfully!", "report": report_json}
+        response = JSONResponse(content=content)
+        return response
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/")
 def serve_index():
     return FileResponse(os.path.join("frontend", "index.html"))
 
 
 if __name__ == "__main__":
-    # uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=False)
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=False)
+    # uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)

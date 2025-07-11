@@ -1,0 +1,1 @@
+scp -i C:/Users/zlgan/Downloads/volcano.pem ubuntu@ec2-3-9-29-178.eu-west-2.compute.amazonaws.com:~/Volcano/debug_audio.mp3 C:/Users/zlgan/Downloads/

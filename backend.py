@@ -11,8 +11,9 @@ import copy
 import tos
 from pydub import AudioSegment
 from io import BytesIO
-from pydantic import BaseModel
 from dotenv import load_dotenv
+from models import *
+import re
 
 
 load_dotenv()  # defaults to .env in current dir
@@ -42,19 +43,6 @@ DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 spk_id = "zh_female_roumeinvyou_emo_v2_mars_bigtts"
 emotion = "neutral"
 emotion_scale = 3
-
-
-class ChatRequest(BaseModel):
-    message: str
-    path: str
-
-
-class CharacterInfo(BaseModel):
-    name: str
-    gender: str
-    age: str
-    job: str
-    relationship: str
 
 
 # def record_audio(filename: str, duration: int = 10, samplerate: int = 24000):
@@ -131,9 +119,25 @@ async def tts(text: str):
     return AUDIO_SAVE_PATH + "/test.mp3"
 
 
+def load_character_info(json_path: str) -> CharacterInfo:
+    """
+    Loads a JSON file and parses it into a CharacterInfo instance.
+
+    Args:
+        json_path (str): Path to the JSON file.
+
+    Returns:
+        CharacterInfo: Parsed character information.
+    """
+    with open(json_path, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+
+    return CharacterInfo(**data)
+
+
 def fill_template(character_info: CharacterInfo) -> str:
     # Read template
-    filename = 'character_info_template.txt'
+    filename = 'initiate_chat_template.txt'
     filepath = os.path.join(TEMPLATE_PATH, filename)
     with open(dirpath + filepath, "r", encoding="utf-8") as f:
         template_content = f.read()
@@ -146,6 +150,69 @@ def fill_template(character_info: CharacterInfo) -> str:
     filled_content = filled_content.replace("*RELATIONSHIP_PLACEHOLDER*", character_info.relationship)
 
     return filled_content
+
+
+def fill_daily_report_template(chatfname: str) -> str:
+    # Read template
+    filename = 'daily_report_template.txt'
+    filepath = os.path.join(TEMPLATE_PATH, filename)
+    with open(dirpath + filepath, "r", encoding="utf-8") as f:
+        template_content = f.read()
+
+    chat_path = os.path.join(CHAT_SAVE_PATH, chatfname)
+    with open(dirpath + chat_path, "r", encoding="utf-8") as f:
+        chat_content = f.read()
+
+    # Replace placeholders
+    filled_content = template_content.replace("*CHAT_PLACEHOLDER*", chat_content)
+
+    return filled_content
+
+
+def save_chat_txt(userfnames: UserFNames) -> None:
+    """
+    Extracts messages from a JSON file and saves them in a readable format to a text file.
+
+    Each line in the output file will be: sender: message_text
+
+    Args:
+        json_path (str): Path to the input JSON file.
+        output_path (str): Path to the output text file.
+    """
+    chat_json_path = os.path.join(CHAT_SAVE_PATH, userfnames.chat_json_fname)
+    with open(dirpath + chat_json_path, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+
+    messages = data.get('messages', [])
+    chat_txt_path = os.path.join(CHAT_SAVE_PATH, userfnames.chat_txt_fname)
+    with open(dirpath + chat_txt_path, 'w', encoding='utf-8') as f:
+        for message in messages:
+            role = message.get('role')
+            content = message.get('content')
+            if role and content:
+                f.write(f"{role}: {content}\n")
+
+
+def save_report_txt(userfnames: UserFNames) -> None:
+    """
+    Extracts messages from a JSON file and saves them in a readable format to a text file.
+
+    Each line in the output file will be: sender: message_text
+
+    Args:
+        json_path (str): Path to the input JSON file.
+        output_path (str): Path to the output text file.
+    """
+    report_json_path = os.path.join(CHAT_SAVE_PATH, userfnames.report_json_fname)
+    with open(dirpath + report_json_path, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+
+    messages = data.get('messages', [])
+    report_txt_path = report_json_path = os.path.join(CHAT_SAVE_PATH, userfnames.report_txt_fname)
+    with open(dirpath + report_txt_path, 'w', encoding='utf-8') as f:
+        for message in messages:
+            print(message)
+            f.write(message)
 
 
 def initiate_query_deepseek(character_info: CharacterInfo) -> str:
@@ -192,7 +259,7 @@ def initiate_query_deepseek(character_info: CharacterInfo) -> str:
     dict_data['messages'].append(response.json()['choices'][0]['message'])
 
     # filename = f"{character_info.name}.json"
-    filename = "character.json"
+    filename = "chat.json"
     filepath = os.path.join(CHAT_SAVE_PATH, filename)
 
     with open(dirpath + filepath, 'w') as f:
@@ -202,6 +269,90 @@ def initiate_query_deepseek(character_info: CharacterInfo) -> str:
     if response.status_code == 200:
         data = response.json()
         return data['choices'][0]['message']['content'], filepath
+    else:
+        return f"Error from DeepSeek: {response.text}"
+
+
+def load_daily_report(file_path: str) -> DailyReport:
+    mapping = {
+        '综合得分': ('overall_score', 'overall_comments'),
+        '心理健康': ('mental_health_score', 'mental_health_comments'),
+        '兴趣与需求': ('interests_needs_score', 'interests_needs_comments'),
+        '家庭联结': ('family_connection_score', 'family_connection_comments'),
+        '安全认知': ('safety_awareness_score', 'safety_awareness_comments'),
+        '身体健康': ('physical_health_score', 'physical_health_comments'),
+        '生活状态': ('living_conditions_score', 'living_conditions_comments'),
+    }
+
+    data = {}
+    with open(file_path, 'r', encoding='utf-8') as f:
+        for line in f:
+            for key, (score_key, comment_key) in mapping.items():
+                if line.startswith(key):
+                    match = re.search(r'(\d+)[，,]\s*评语[:：](.*)', line)
+                    if match:
+                        data[score_key] = int(match.group(1))
+                        data[comment_key] = match.group(2).strip()
+                    break
+            else:
+                if line.startswith('综合建议'):
+                    data['overall_comments'] = line.split('：', 1)[-1].strip()
+
+    return DailyReport(**data)
+
+
+def get_daily_report_deepseek(userfnames: UserFNames) -> DailyReport:
+    save_chat_txt(userfnames)
+    print(f'User chat successfully saved to {userfnames.chat_txt_fname}.')
+    filled_text = fill_daily_report_template(userfnames.chat_txt_fname)
+
+    dict_data = {
+    "messages": [
+        {
+        "content": filled_text,
+        "role": "user"
+        }
+    ],
+    "model": "deepseek-chat",
+    "frequency_penalty": 0,
+    "max_tokens": 2048,
+    "presence_penalty": 0,
+    "response_format": {
+        "type": "text"
+    },
+    "stop": None,
+    "stream": False,
+    "stream_options": None,
+    "temperature": 1,
+    "top_p": 1,
+    "tools": None,
+    "tool_choice": "none",
+    "logprobs": False,
+    "top_logprobs": None
+    }
+
+    payload = json.dumps(dict_data)
+
+    headers = {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+    'Authorization': f'Bearer {DEEPSEEK_API_KEY}'
+    }
+
+    response = requests.request("POST", DEEPSEEK_API_URL, headers=headers, data=payload)
+    dict_data['messages'].append(response.json()['choices'][0]['message'])
+    
+
+    if response.status_code == 200:
+        data = response.json()
+        content = data['choices'][0]['message']['content']
+
+        report_txt_path = os.path.join(CHAT_SAVE_PATH, userfnames.report_txt_fname)
+        with open(dirpath + report_txt_path, 'w', encoding='utf-8') as f:
+            f.write(content)
+        print(f'User daily report successfully saved to {userfnames.report_txt_fname}.')
+        report = load_daily_report(report_txt_path)
+        return report
     else:
         return f"Error from DeepSeek: {response.text}"
 
