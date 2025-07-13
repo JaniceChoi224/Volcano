@@ -46,6 +46,7 @@ app = FastAPI(lifespan=lifespan)
 origins = [
     "http://localhost:3000",  # <-- must match exactly!
     "https://logically-sunny-boxer.ngrok-free.app",
+    "https://gbifvyihk.com"
 ]
 
 app.add_middleware(
