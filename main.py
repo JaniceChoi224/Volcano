@@ -40,8 +40,8 @@ class NoCacheStaticFiles(StaticFiles):
         response.headers["Cache-Control"] = "no-store"
         return response
 
-app = FastAPI(lifespan=lifespan)
-# app = FastAPI()
+# app = FastAPI(lifespan=lifespan)
+app = FastAPI()
 
 origins = [
     "http://localhost:3000",  # <-- must match exactly!
