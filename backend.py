@@ -36,7 +36,7 @@ os.makedirs(dirpath + CHAT_SAVE_PATH, exist_ok=True)
 os.makedirs(dirpath + TEMPLATE_PATH, exist_ok=True)
 
 # DeepSeek API configuration
-DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"
+DEEPSEEK_API_URL = "https://api.deepseek.com/chat/completions"
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 
 # spk_id = "S_r5Xp9i6s1"
@@ -99,7 +99,7 @@ def convert_audio_to_wav(file_content: bytes, input_format: str, filename: str) 
         "-sample_fmt", "s16"  # sample format: 16-bit PCM
     ])
 
-    upload_audio(filename, dirpath + wav_file_path)
+    upload_audio_tos(filename, dirpath + wav_file_path)
     print('Uploaded the .wav file to TOS')
 
     return wav_file_path
@@ -592,7 +592,7 @@ region = "cn-beijing"
 bucket_name = "voicecompanion2"
 
 
-def upload_audio(object_key, file_name):
+def upload_audio_tos(object_key, file_name):
     try:
         # 创建 TosClientV2 对象，对桶和对象的操作都通过 TosClientV2 实现
         client = tos.TosClientV2(TOS_ACCESS_KEY, TOS_SECRET_KEY, endpoint, region)
@@ -697,10 +697,10 @@ def stt_query(task_id, x_tt_logid):
     return response
 
 
-def stt():
+def stt(filename: str):
     import time
     from fastapi import HTTPException
-    file_url = "https://voicecompanion2.tos-cn-beijing.volces.com/voice_chat.wav"
+    file_url = f"https://voicecompanion2.tos-cn-beijing.volces.com/{filename}"
     task_id, x_tt_logid = stt_submit(file_url)
     # while True:
     for _ in range(30):  # max 30 retries

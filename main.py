@@ -95,27 +95,36 @@ async def upload_voice(target: str = Form(...), file: UploadFile = File(...)):
 
 @app.get("/check-audio-path/")
 async def check_audio_path():
-    file_exists = check_file_exists('audio', 'voice_sample.wav')
-    content = {"status": "success", "exists": file_exists}
-    response = JSONResponse(content=content)
-    return response
-    # return JSONResponse(content={"status": "success", "exists": True})
+    try:
+        file_exists = check_file_exists('audio', 'voice_sample.wav')
+        content = {"status": "success", "exists": file_exists}
+        response = JSONResponse(content=content)
+        return response
+        # return JSONResponse(content={"status": "success", "exists": True})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/stt/")
 async def stt_endpoint():
-    text = stt()
-    content = {"status": "success", "text": text}
-    response = JSONResponse(content=content)
-    return response
+    try:
+        text = stt()
+        content = {"status": "success", "text": text}
+        response = JSONResponse(content=content)
+        return response
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/voice_clone/")
 async def voice_clone_endpoint():
-    spk_id = voice_clone()
-    content = {"status": "success", "spk_id": spk_id}
-    response = JSONResponse(content=content)
-    return response
+    try:
+        spk_id = voice_clone()
+        content = {"status": "success", "spk_id": spk_id}
+        response = JSONResponse(content=content)
+        return response
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # @app.post("/record-audio/")
@@ -133,12 +142,8 @@ async def voice_clone_endpoint():
 #         raise HTTPException(status_code=500, detail=str(e))
 
 
-class TextData(BaseModel):
-    text: str
-
-
 @app.post("/tts/")
-async def tts_endpoint(data: TextData):
+async def tts_endpoint(text: str):
     # try:
         # saved_path = tts(data.text)
         # # saved_path = generate_combined_voice(data.text)
@@ -149,31 +154,39 @@ async def tts_endpoint(data: TextData):
         # return response
     # except Exception as e:
     #     raise HTTPException(status_code=500, detail=str(e))
-
-    saved_path = await tts(data.text)
-    content = {"status": "success", "file": saved_path}
-    response = JSONResponse(content=content)
-    return response
+    try:
+        saved_path = await tts(text)
+        content = {"status": "success", "file": saved_path}
+        response = JSONResponse(content=content)
+        return response
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/chat/")
 async def chat(data: ChatRequest):
-    # history_filepath = request.cookies.get('history_filepath')
-    reply = query_deepseek(data.message, data.path)
-    
-    content = {"reply": reply}
-    response = JSONResponse(content=content)
-    return response
+    try:
+        # history_filepath = request.cookies.get('history_filepath')
+        reply = query_deepseek(data.message, data.path)
+        
+        content = {"reply": reply}
+        response = JSONResponse(content=content)
+        return response
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/initiate/")
 async def initiate_chat(character_info: CharacterInfo):
-    message, filepath = initiate_query_deepseek(character_info)
-    
-    content = {"message": "User info saved successfully!", "file": filepath, "Reply": message}
-    response = JSONResponse(content=content)
-    # response.set_cookie(key="history_filepath", value=filepath, secure=True, samesite='none')
-    return response
+    try:
+        message, filepath = initiate_query_deepseek(character_info)
+        
+        content = {"message": "User info saved successfully!", "file": filepath, "Reply": message}
+        response = JSONResponse(content=content)
+        # response.set_cookie(key="history_filepath", value=filepath, secure=True, samesite='none')
+        return response
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/get-daily-report/")
