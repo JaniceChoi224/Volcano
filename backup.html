@@ -36,7 +36,7 @@
       overflow-y: auto;
     }
 
-    #record-btn, #proceed-btn, #upload-btn, #send-btn, #start-btn {
+    #record-btn, #record-btn2, #proceed-btn, #upload-btn, #send-btn, #start-btn {
       margin-top: 10px;
       padding: 12px 20px;
       border: none;
@@ -46,6 +46,30 @@
       cursor: pointer;
       font-size: clamp(1rem, 2.8vw, 1.2rem);
       width: auto;
+    }
+
+    .message-wrapper {
+      display: flex;
+      align-items: flex-start;
+      margin: 10px 0;
+      max-width: 70%;
+    }
+
+    .message-wrapper.user {
+      justify-content: flex-end;
+      flex-direction: row-reverse;
+    }
+
+    .message-wrapper.bot {
+      justify-content: flex-start;
+      flex-direction: row;
+    }
+
+    .avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      margin: 0 10px;
     }
 
     #chat-box {
@@ -63,10 +87,14 @@
       padding: 10px;
       border-radius: 15px;
       word-wrap: break-word;
+      word-break: break-word;
       display: flex;
       flex-direction: column;
       align-items: flex-start;
       margin: 5px 0;
+      width: fit-content;
+      white-space: pre-wrap;
+      text-align: left;
     }
 
     .message audio {
@@ -114,6 +142,13 @@
       font-size: clamp(1rem, 2.8vw, 1.2rem);
     }
 
+    #chat-controls {
+      gap: 10px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
     .recording {
       background: red !important;
       color: white !important;
@@ -153,14 +188,20 @@
   <div id="chat-box"></div>
 
   <div id="input-area">
-    <input id="input" type="text" placeholder="Type your message..." />
-    <button id="send-btn">Send</button>
+    <div id="chat-controls" style="display: none;">
+      <input id="input" type="text" placeholder="Type your message..." />
+      <button id="send-btn">Send</button>
+      <button id="record-btn2">Record Voice</button>
+    </div>
     <button id="start-btn">Start New Chat</button>
   </div>
 
   <script>
     // const backendUrl = "http://127.0.0.1:8000";
-    const backendUrl = "https://logically-sunny-boxer.ngrok-free.app";
+    // const backendUrl = "https://logically-sunny-boxer.ngrok-free.app";
+    const backendUrl = "https://gbifvyihk.com";
+    let mediaRecorder;
+    let audioChunks = [];
 
     document.getElementById('upload-btn').addEventListener('click', () => {
       document.getElementById('upload-input').click();
@@ -171,6 +212,7 @@
       if (!file) return;
 
       const formData = new FormData();
+      formData.append("target", "voice_clone")
       formData.append("file", file);
 
       try {
@@ -203,30 +245,74 @@
 
     document.getElementById('record-btn').addEventListener('click', async () => {
       const recordBtn = document.getElementById('record-btn');
-      recordBtn.textContent = "Recording...";
-      recordBtn.classList.add('recording');
+
+      // Stop if already recording
+      if (mediaRecorder && mediaRecorder.state === 'recording') {
+        mediaRecorder.stop();
+        return;
+      }
 
       try {
-        const response = await fetch(backendUrl + "/record-audio/", {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: new URLSearchParams({ duration: 5, filename: "voice_sample.wav" })
-        });
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-        const data = await response.json();
-        recordBtn.textContent = "Record Voice";
-        recordBtn.classList.remove('recording');
-
-        if (data.status === "success") {
-          document.getElementById('recorded-audio').src = backendUrl + "/" + data.file;
-          document.getElementById('recorded-audio').style.display = "block";
-          document.getElementById('proceed-btn').style.display = "block";
-        } else {
-          alert("Recording failed: " + data.message);
+        let mimeType = 'audio/webm';
+        if (!MediaRecorder.isTypeSupported(mimeType)) {
+          mimeType = 'audio/webm;codecs=opus';
         }
-      } catch (error) {
-        console.error(error);
-        alert("An error occurred while recording.");
+
+        mediaRecorder = new MediaRecorder(stream, { mimeType });
+        audioChunks = [];
+
+        mediaRecorder.ondataavailable = event => {
+          if (event.data.size > 0) {
+            audioChunks.push(event.data);
+          }
+        };
+
+        mediaRecorder.onstop = async () => {
+          recordBtn.textContent = "Record Voice";
+          recordBtn.classList.remove('recording');
+
+          const audioBlob = new Blob(audioChunks, { type: mimeType });
+          const formData = new FormData();
+          formData.append("target", "voice_clone")
+          formData.append('file', audioBlob, 'voice_sample.webm');
+
+          try {
+            const uploadRes = await fetch(backendUrl + "/upload-voice/", {
+              method: "POST",
+              body: formData,
+            });
+
+            if (!uploadRes.ok) {
+              const errorText = await uploadRes.text();
+              console.error("Upload failed response:", errorText);
+              throw new Error("Upload failed with status: " + uploadRes.status);
+            }
+
+            const result = await uploadRes.json();
+            if (result.status === 'success') {
+              alert("Voice uploaded successfully!");
+              const audioUrl = backendUrl + "/" + result.file;
+              document.getElementById('recorded-audio').src = audioUrl;
+              document.getElementById('recorded-audio').style.display = 'block';
+              document.getElementById('proceed-btn').style.display = 'block';
+            } else {
+              alert("Upload failed.");
+            }
+          } catch (err) {
+            console.error("Upload error:", err);
+            alert("Upload failed.");
+          }
+        };
+
+        mediaRecorder.start();
+        recordBtn.textContent = "Recording... (click to stop)";
+        recordBtn.classList.add('recording');
+
+      } catch (err) {
+        console.error("MediaRecorder error:", err);
+        alert("Microphone access denied or unsupported.");
       }
     });
 
@@ -257,57 +343,158 @@
       }
     });
 
+    document.getElementById('record-btn2').addEventListener('click', async () => {
+      const recordBtn = document.getElementById('record-btn2');
+
+      if (mediaRecorder && mediaRecorder.state === 'recording') {
+        mediaRecorder.stop();
+        return;
+      }
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+        let mimeType = 'audio/webm';
+        if (!MediaRecorder.isTypeSupported(mimeType)) {
+          mimeType = 'audio/webm;codecs=opus';
+        }
+
+        mediaRecorder = new MediaRecorder(stream, { mimeType });
+        audioChunks = [];
+
+        mediaRecorder.ondataavailable = event => {
+          if (event.data.size > 0) {
+            audioChunks.push(event.data);
+          }
+        };
+
+        mediaRecorder.onstop = async () => {
+          recordBtn.textContent = "Record Voice";
+          recordBtn.classList.remove('recording');
+
+          const audioBlob = new Blob(audioChunks, { type: mimeType });
+          const formData = new FormData();
+          formData.append("target", "voice_chat");
+          formData.append('file', audioBlob, 'voice_sample.webm');
+
+          try {
+            const uploadRes = await fetch(backendUrl + "/upload-voice/", {
+              method: "POST",
+              body: formData,
+            });
+
+            if (!uploadRes.ok) {
+              const errorText = await uploadRes.text();
+              console.error("Upload failed response:", errorText);
+              throw new Error("Upload failed with status: " + uploadRes.status);
+            }
+
+            const result = await uploadRes.json();
+            if (result.status === 'success') {
+              const audioUrl = backendUrl + "/" + result.file;
+              document.getElementById('recorded-audio').src = audioUrl;
+              document.getElementById('recorded-audio').style.display = 'block';
+              document.getElementById('proceed-btn').style.display = 'block';
+
+              // 🔁 STEP 2: Call /stt/ with uploaded file path
+              const sttRes = await fetch(`${backendUrl}/stt/`);
+
+              const sttData = await sttRes.json();
+              console.log("STT Text:", sttData.text);
+
+              // 🟩 STEP 3: Put text into input and trigger sendMessage
+              input.value = sttData.text;
+              await sendMessage();
+
+            } else {
+              alert("Upload failed.");
+            }
+          } catch (err) {
+            console.error("Upload error:", err);
+            alert("Upload failed.");
+          }
+        };
+
+        mediaRecorder.start();
+        recordBtn.textContent = "Recording... (click to stop)";
+        recordBtn.classList.add('recording');
+
+      } catch (err) {
+        console.error("MediaRecorder error:", err);
+        alert("Microphone access denied or unsupported.");
+      }
+    });
+
     const chatBox = document.getElementById('chat-box');
     const input = document.getElementById('input');
     const sendBtn = document.getElementById('send-btn');
     const startBtn = document.getElementById('start-btn');
 
     function appendMessage(sender, text, audioUrl = null) {
-    const message = document.createElement('div');
-    message.className = 'message ' + (sender === 'user' ? 'user' : 'bot');
-    message.innerHTML = `<div>${text}</div>`;
-    
-    if (audioUrl) {
+      const message = document.createElement('div');
+      message.className = 'message-wrapper ' + sender;
+
+      const avatar = document.createElement('img');
+      avatar.className = 'avatar';
+      avatar.src = sender === 'user' ? backendUrl + '/static/figs/user-avatar.jpg' : backendUrl + '/static/figs/bot-avatar.jpg'; // Change to your actual image paths
+      avatar.alt = sender;
+      
+      const bubble = document.createElement('div');
+      bubble.className = 'message ' + (sender === 'user' ? 'user' : 'bot');
+      bubble.innerHTML = `<div>${text}</div>`;
+
+      if (audioUrl) {
         const audio = document.createElement('audio');
         audio.src = audioUrl;
         audio.controls = true;
-        message.appendChild(audio);
-    }
+        bubble.appendChild(audio);
+      }
 
-    chatBox.appendChild(message);
-    chatBox.scrollTop = chatBox.scrollHeight;
+      if (sender === 'user') {
+        message.appendChild(bubble);
+        message.appendChild(avatar);
+      } else {
+        message.appendChild(avatar);
+        message.appendChild(bubble);
+      }
+
+      chatBox.appendChild(message);
+      chatBox.scrollTop = chatBox.scrollHeight;
     }
 
     // Start new conversation (initiate)
     startBtn.addEventListener('click', async () => {
-    try {
-        const name = prompt("请输入人物姓名:");
-        const gender = prompt("请输入人物性别:");
-        const age = prompt("请输入人物年龄:");
-        const job = prompt("请输入人物职业:");
-        const relationship = prompt("请输入你与人物的关系:");
+      try {
+          const name = prompt("请输入人物姓名:");
+          const gender = prompt("请输入人物性别:");
+          const age = prompt("请输入人物年龄:");
+          const job = prompt("请输入人物职业:");
+          const relationship = prompt("请输入你与人物的关系:");
 
-        if (!name || !gender || !age || !job || !relationship) {
-        alert("All fields are required!");
-        return;
-        }
+          if (!name || !gender || !age || !job || !relationship) {
+          alert("All fields are required!");
+          return;
+          }
 
-        const characterInfo = { name, gender, age, job, relationship };
+          const characterInfo = { name, gender, age, job, relationship };
 
-        const response = await fetch(backendUrl + "/initiate/", {
-        method: "POST", // <-- make sure it is POST!
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(characterInfo),
-        credentials: "include"
-        });
+          const response = await fetch(backendUrl + "/initiate/", {
+          method: "POST", // <-- make sure it is POST!
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(characterInfo),
+          credentials: "include"
+          });
 
-        const data = await response.json();
-        historyPath = data.file
-        appendMessage('bot', "Chat started: " + data.Reply);
-    } catch (error) {
-        console.error(error);
-        alert("Failed to start chat!");
-    }
+          const data = await response.json();
+          historyPath = data.file
+          appendMessage('bot', "Chat started: " + data.Reply);
+
+          document.getElementById('chat-controls').style.display = 'flex';
+          document.getElementById('start-btn').style.display = 'none';
+      } catch (error) {
+          console.error(error);
+          alert("Failed to start chat!");
+      }
     });
 
     // Send message to DeepSeek
@@ -347,7 +534,7 @@
         appendMessage('bot', replyText);
 
         // Then request voice cloning
-        const voiceResponse = await fetch(backendUrl + "/voice_clone/", {
+        const voiceResponse = await fetch(backendUrl + "/tts/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: replyText })
@@ -358,14 +545,16 @@
         
         console.log('audio path: ', audioFile)
         // Show audio button
-        const lastBotMessage = chatBox.querySelector('.bot:last-child');
-        if (lastBotMessage && audioFile) {
-        const audio = document.createElement('audio');
-        const timestamp = Date.now();  // Cache-busting timestamp
-        audio.src = `${backendUrl}/${audioFile}?ts=${timestamp}`;
-        // audio.src = backendUrl + '/' + audioFile;
-        audio.controls = true;
-        lastBotMessage.appendChild(audio);
+        const wrappers = chatBox.querySelectorAll('.message-wrapper.bot');
+        const lastWrapper = wrappers[wrappers.length - 1];
+        const lastBotBubble = lastWrapper?.querySelector('.message');
+
+        if (lastBotBubble && audioFile) {
+          const audio = document.createElement('audio');
+          const timestamp = Date.now();
+          audio.src = `${backendUrl}/${audioFile}?ts=${timestamp}`;
+          audio.controls = true;
+          lastBotBubble.appendChild(audio);
         }
 
     } catch (error) {

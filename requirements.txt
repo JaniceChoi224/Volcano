@@ -10,3 +10,4 @@ fastapi[standard]
 ngrok
 pydub
 tos
+magic

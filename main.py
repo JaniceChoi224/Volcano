@@ -14,6 +14,7 @@ from dotenv import load_dotenv
 from contextlib import asynccontextmanager
 import ngrok
 from models import *
+import magic
 
 
 load_dotenv()  # defaults to .env in current dir
@@ -76,7 +77,22 @@ async def upload_voice(target: str = Form(...), file: UploadFile = File(...)):
 
         # Read the uploaded file content directly to memory
         file_content = await file.read()
-        input_format = file.filename.split(".")[-1].lower()
+        
+        def detect_mime_type(file_bytes: bytes) -> str:
+            mime = magic.Magic(mime=True)
+            return mime.from_buffer(file_bytes)
+
+        mime_type = detect_mime_type(file_content)
+
+        if mime_type in ["audio/webm", "video/webm"]:
+            input_format = "webm"
+        elif mime_type == "audio/mpeg":
+            input_format = "mp3"
+        elif mime_type == "audio/wav":
+            input_format = "wav"
+        else:
+            raise ValueError(f"Unsupported MIME type: {mime_type}")
+        # input_format = file.filename.split(".")[-1].lower()
         print(f"Detected extension: {input_format}, size: {len(file_content)} bytes")
 
         if target == 'voice_clone':

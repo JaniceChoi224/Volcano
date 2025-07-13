@@ -14,6 +14,7 @@ from io import BytesIO
 from dotenv import load_dotenv
 from models import *
 import re
+from pydub.exceptions import CouldntDecodeError
 
 
 load_dotenv()  # defaults to .env in current dir
@@ -88,6 +89,17 @@ def convert_audio_to_wav(file_content: bytes, input_format: str, filename: str) 
         str: The path to the saved WAV file.
     """
     # Convert the file content to an audio segment
+    print(type(file_content), len(file_content))
+    try:
+        audio = AudioSegment.from_file(BytesIO(file_content), format=input_format)
+        # audio = AudioSegment.from_file("debug_audio.mp3", format=input_format)
+    except CouldntDecodeError as e:
+        print("Could not decode audio:", e)
+        raise
+    except Exception as e:
+        print("General error:", e)
+        raise
+    # print(file_content)
     audio = AudioSegment.from_file(BytesIO(file_content), format=input_format)
 
     wav_file_path = os.path.join(AUDIO_SAVE_PATH, filename)
